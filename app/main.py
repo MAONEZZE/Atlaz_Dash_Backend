@@ -7,7 +7,18 @@ import app.core.logging  # noqa: F401 — initializes loguru
 
 from app.api.routes import health, statistics, goals, users, sales_values, pre_sales, sheets_debug
 
-app = FastAPI(title="Atlaz Dash Backend", version="1.0.0")
+app = FastAPI(
+    title="Atlaz Dash Backend",
+    version="1.0.0",
+    description=(
+        "API de leitura e normalização de dados para o dashboard Atlaz Dash.\n\n"
+        "**Fontes de dados:** Google Sheets (somente leitura), Supabase Postgres, n8n.\n\n"
+        "**Regra:** nenhum endpoint escreve, edita ou deleta dados nas planilhas."
+    ),
+    docs_url="/doc",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
+)
 
 app.add_middleware(
     CORSMiddleware,
