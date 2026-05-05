@@ -1,6 +1,7 @@
 .git
 .venv
 venv
+tasks/
 __pycache__
 .pytest_cache
 *.pyc
