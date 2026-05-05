@@ -1,7 +1,7 @@
 from app.utils.normalize_text import normalize_for_compare
 
 FIELD_MAP: dict[str, list[str]] = {
-    "nome": ["nome", "cliente", "lead", "contato", "responsável", "responsavel"],
+    "nome": ["nome", "pessoa", "cliente", "lead", "contato", "responsável", "responsavel", "colaborador", "funcionario", "funcionário"],
     "cargo": ["cargo", "função", "funcao", "posição", "posicao"],
     "closer": ["closer", "vendedor", "responsável venda", "responsavel venda"],
     "sdr": ["sdr", "pré-vendedor", "pre vendedor", "responsável pré-venda", "responsavel pre venda"],
@@ -27,7 +27,7 @@ FIELD_MAP: dict[str, list[str]] = {
     "indicacoes": ["indicações", "indicacoes"],
     "indicacoes_captadas": ["indicações captadas", "indicacoes captadas"],
     "abordagens": ["abordagens"],
-    "meta_mensal": ["meta mensal", "meta_mensal", "meta faturamento", "faturamento meta"],
+    "meta_mensal": ["meta mensal", "meta mensal (r$)", "meta mensal (rs)", "meta_mensal", "meta faturamento", "faturamento meta", "meta de faturamento"],
     "meta_numeros": ["meta números", "meta numeros", "meta_numeros"],
     "meta_leads": ["meta leads", "meta_leads"],
     "meta_ligacoes": ["meta ligações", "meta ligacoes", "meta_ligacoes"],

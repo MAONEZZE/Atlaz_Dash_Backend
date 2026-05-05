@@ -42,6 +42,10 @@ def parse_goals(matrix: list[list]) -> list[SalesGoalsDTO]:
             cargo_raw = mapped.get("cargo", "")
             cargo = _normalize_cargo(cargo_raw) if cargo_raw else ""
 
+            # Skip summary rows and unknown roles (e.g. "Time", header repetitions)
+            if cargo not in ("Closer", "SDR"):
+                continue
+
             results.append(SalesGoalsDTO(
                 Nome=nome,
                 Cargo=cargo,

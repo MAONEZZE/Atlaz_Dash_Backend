@@ -14,27 +14,38 @@ _READONLY_SCOPE = "https://www.googleapis.com/auth/spreadsheets.readonly"
 _service = None  # singleton — avoid recreating client on every request
 
 
+def _resolve_credentials() -> service_account.Credentials:
+    """
+    Load service account credentials from env vars.
+    Accepted formats (checked in order):
+      1. GOOGLE_SHEETS_CREDENTIALS_JSON — inline JSON string
+      2. GOOGLE_APPLICATION_CREDENTIALS  — inline JSON string OR file path
+    """
+    candidates = [
+        settings.google_sheets_credentials_json.strip(),
+        settings.google_application_credentials.strip(),
+    ]
+
+    for raw in candidates:
+        if not raw:
+            continue
+        if raw.startswith("{"):
+            try:
+                info = _json.loads(raw)
+            except _json.JSONDecodeError as exc:
+                raise DataSourceError("google_sheets", f"Credentials env var is not valid JSON: {exc}") from exc
+            return service_account.Credentials.from_service_account_info(info, scopes=[_READONLY_SCOPE])
+        # Treat as file path
+        return service_account.Credentials.from_service_account_file(raw, scopes=[_READONLY_SCOPE])
+
+    raise DataSourceError(
+        "google_sheets",
+        "No credentials configured. Set GOOGLE_SHEETS_CREDENTIALS_JSON (JSON content) or GOOGLE_APPLICATION_CREDENTIALS (JSON content or file path).",
+    )
+
+
 def _build_service():
-    # Priority: GOOGLE_SHEETS_CREDENTIALS_JSON (inline JSON) > GOOGLE_APPLICATION_CREDENTIALS (file path)
-    json_str = settings.google_sheets_credentials_json.strip()
-    file_path = settings.google_application_credentials.strip()
-
-    if json_str:
-        try:
-            info = _json.loads(json_str)
-        except _json.JSONDecodeError as exc:
-            raise DataSourceError("google_sheets", f"GOOGLE_SHEETS_CREDENTIALS_JSON is not valid JSON: {exc}") from exc
-        creds = service_account.Credentials.from_service_account_info(info, scopes=[_READONLY_SCOPE])
-    elif file_path:
-        if not file_path.endswith(".json"):
-            raise DataSourceError("google_sheets", "GOOGLE_APPLICATION_CREDENTIALS must point to a .json file")
-        creds = service_account.Credentials.from_service_account_file(file_path, scopes=[_READONLY_SCOPE])
-    else:
-        raise DataSourceError(
-            "google_sheets",
-            "No credentials configured. Set GOOGLE_SHEETS_CREDENTIALS_JSON (JSON content) or GOOGLE_APPLICATION_CREDENTIALS (file path).",
-        )
-
+    creds = _resolve_credentials()
     assert _READONLY_SCOPE in creds.scopes, "Sheets credentials must use readonly scope only"
     return build("sheets", "v4", credentials=creds, cache_discovery=False)
 
@@ -42,7 +53,11 @@ def _build_service():
 def _get_service():
     global _service
     if _service is None:
-        _service = _build_service()
+        try:
+            _service = _build_service()
+        except Exception:
+            _service = None  # don't cache failed build
+            raise
     return _service
 
 
