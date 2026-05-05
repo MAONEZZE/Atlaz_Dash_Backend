@@ -1,21 +1,9 @@
 """
 Historical statistics repository — Supabase (Postgres).
 
-Table schema assumption (pending stakeholder confirmation):
-  Table: statistics_history
-  Columns:
-    id, date (timestamp), responsible (text), role (text: 'closer'|'sdr'),
-    channel (text), product (text), stage (text), status (text),
-    revenue_type (text), ticket_range (text), activity (text),
-    -- SDR fields:
-    conexoes_enviadas (int), conexoes_aceitas (int), abordagens (int),
-    inmails_enviados (int), follow_ups (int), numeros_captados (int),
-    ligacoes_agendadas (int), indicacoes_captadas (int),
-    -- Closer fields:
-    ligacoes_realizadas (int), reunioes_agendadas (int),
-    reunioes_realizadas (int), indicacoes (int)
-
-Until schema is confirmed, queries stub to return [].
+Joins dash_metricas_prospeccao (metrics) with dash_users (user info).
+Aggregates _atual columns by user and date range.
+Maps dashboard fields to API response field names.
 """
 
 from datetime import datetime
@@ -73,56 +61,46 @@ def fetch_historical_statistics(
         return []
 
     params: dict = {}
-    conditions: list[str] = []
 
+    # Build WHERE clause — date filter + responsible name filter
+    date_conditions = []
     if start_date:
-        conditions.append("date >= :start_date")
+        date_conditions.append("m.data_referente >= :start_date")
         params["start_date"] = start_date
-
     if end_date:
-        conditions.append("date < :end_date")
+        date_conditions.append("m.data_referente < :end_date")
         params["end_date"] = end_date
 
-    for field_name, value in [
-        ("channel", channel),
-        ("responsible", responsible),
-        ("product", product),
-        ("stage", stage),
-        ("status", status),
-        ("revenue_type", revenue_type),
-        ("ticket_range", ticket_range),
-        ("activity", activity),
-    ]:
-        normalized = _normalize_filter(value)
-        if normalized:
-            # Use unaccent + lower for accent-insensitive compare (Postgres unaccent extension)
-            # Fallback: lower(field) = lower(value) if unaccent not available
-            conditions.append(f"lower(unaccent({field_name}::text)) = :{field_name}")
-            params[field_name] = normalized
+    responsible_filter = ""
+    if responsible:
+        normalized_responsible = _normalize_filter(responsible)
+        if normalized_responsible:
+            responsible_filter = "AND lower(unaccent(u.nome::text)) = :responsible"
+            params["responsible"] = normalized_responsible
 
-    where_clause = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+    date_where = ("WHERE " + " AND ".join(date_conditions)) if date_conditions else "WHERE TRUE"
 
-    # STUB: Table name placeholder — replace with confirmed table name
     query = text(f"""
         SELECT
-            responsible AS "Nome",
-            role,
-            SUM(conexoes_enviadas)    AS conexoes_enviadas,
-            SUM(conexoes_aceitas)     AS conexoes_aceitas,
-            SUM(abordagens)           AS abordagens,
-            SUM(inmails_enviados)     AS inmails_enviados,
-            SUM(follow_ups)           AS follow_ups,
-            SUM(numeros_captados)     AS numeros_captados,
-            SUM(ligacoes_agendadas)   AS ligacoes_agendadas,
-            SUM(indicacoes_captadas)  AS indicacoes_captadas,
-            SUM(ligacoes_realizadas)  AS ligacoes_realizadas,
-            SUM(reunioes_agendadas)   AS reunioes_agendadas,
-            SUM(reunioes_realizadas)  AS reunioes_realizadas,
-            SUM(indicacoes)           AS indicacoes
-        FROM statistics_history
-        {where_clause}
-        GROUP BY responsible, role
-        ORDER BY responsible
+            u.nome AS "Nome",
+            u.cargo AS role,
+            SUM(COALESCE(m.conexoes_atual, 0))          AS conexoes_enviadas,
+            SUM(COALESCE(m.conexoes_aceitas_atual, 0))  AS conexoes_aceitas,
+            SUM(COALESCE(m.abordagens_atual, 0))        AS abordagens,
+            SUM(COALESCE(m.inmail_atual, 0))            AS inmails_enviados,
+            SUM(COALESCE(m.follow_up_atual, 0))         AS follow_ups,
+            SUM(COALESCE(m.numero_atual, 0))            AS numeros_captados,
+            SUM(COALESCE(m.lig_agendado_atual, 0))      AS ligacoes_agendadas,
+            SUM(COALESCE(m.lig_realizado_atual, 0))     AS ligacoes_realizadas,
+            SUM(COALESCE(m.reuniao_agendado_atual, 0))  AS reunioes_agendadas,
+            SUM(COALESCE(m.reuniao_realizado_atual, 0)) AS reunioes_realizadas,
+            SUM(COALESCE(m.indicacoes_atual, 0))        AS indicacoes
+        FROM dash_metricas_prospeccao m
+        JOIN dash_users u ON m.id_user = u.id
+        {date_where}
+        {responsible_filter}
+        GROUP BY u.id, u.nome, u.cargo
+        ORDER BY u.nome
     """)
 
     try:
