@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     vite_img_jonathan_token: str = ""
     vite_img_alex_token: str = ""
     vite_img_jennifer_token: str = ""
+    vite_img_tayrone_token: str = ""
 
     @property
     def cors_origins_list(self) -> list[str]:

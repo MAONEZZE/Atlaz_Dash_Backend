@@ -112,8 +112,8 @@ def _db_rows_to_normalized(rows: list[dict]) -> NormalizedStatistics:
                 follow_ups=int(normalize_number(row.get("follow_ups", 0))),
                 numeros_captados=int(normalize_number(row.get("numeros_captados", 0))),
                 ligacoes_agendadas=int(normalize_number(row.get("ligacoes_agendadas", 0))),
-                reunioes_agendadas=0,
-                indicacoes_captadas=int(normalize_number(row.get("indicacoes_captadas", 0))),
+                reunioes_agendadas=int(normalize_number(row.get("reunioes_agendadas", 0))),
+                indicacoes_captadas=int(normalize_number(row.get("indicacoes", 0))),
             ))
         elif role == "closer":
             closer_list.append(NormalizedCloserStats(

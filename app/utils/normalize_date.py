@@ -42,10 +42,11 @@ def normalize_date(value: object) -> Optional[datetime]:
     pt = _try_pt_month_year(raw)
     if pt:
         return pt
-    if re.match(r"\d{2}/\d{2}/\d{4}", raw):
+    if re.match(r"\d{1,2}/\d{1,2}/\d{4}", raw):
         try:
-            return datetime.strptime(raw, "%d/%m/%Y").replace(tzinfo=timezone.utc)
-        except ValueError:
+            day, month, year = raw.split("/")
+            return datetime(int(year), int(month), int(day), tzinfo=timezone.utc)
+        except (ValueError, OverflowError):
             pass
     try:
         return dateutil_parser.parse(raw).replace(tzinfo=timezone.utc)

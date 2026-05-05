@@ -50,10 +50,7 @@ def fetch_historical_statistics(
     """
     Query historical statistics from Supabase Postgres.
     Returns [] if DB unavailable or no rows match.
-    All text filters are accent+case insensitive.
-
-    NOTE: Stubbed until Supabase table schema is confirmed.
-    When schema is ready, replace the stub body with real query.
+    Text filters are case-insensitive; normalize accent on Python side before calling.
     """
     engine = _get_engine()
     if engine is None:
@@ -75,7 +72,7 @@ def fetch_historical_statistics(
     if responsible:
         normalized_responsible = _normalize_filter(responsible)
         if normalized_responsible:
-            responsible_filter = "AND lower(unaccent(u.nome::text)) = :responsible"
+            responsible_filter = "AND lower(u.nome::text) = :responsible"
             params["responsible"] = normalized_responsible
 
     date_where = ("WHERE " + " AND ".join(date_conditions)) if date_conditions else "WHERE TRUE"

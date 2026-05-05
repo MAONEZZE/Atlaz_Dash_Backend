@@ -10,10 +10,10 @@ from app.utils.normalize_text import normalize_for_compare
 
 def _normalize_cargo(raw: str) -> str:
     v = normalize_for_compare(raw)
+    if "sdr" in v or "pre" in v:
+        return "SDR"
     if "closer" in v or "vendedor" in v:
         return "Closer"
-    if "sdr" in v or "pre" in v or "pré" in v:
-        return "SDR"
     return raw.strip().title()
 
 

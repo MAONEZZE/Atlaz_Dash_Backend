@@ -35,3 +35,9 @@ def test_none():
 
 def test_empty():
     assert normalize_date("") is None
+
+
+def test_ddmmyyyy_no_leading_zeros():
+    """Dates without leading zeros must parse as day/month, not month/day."""
+    dt = normalize_date("5/6/2024")
+    assert dt == datetime(2024, 6, 5, tzinfo=timezone.utc)

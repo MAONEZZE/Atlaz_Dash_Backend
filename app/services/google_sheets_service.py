@@ -1,3 +1,5 @@
+import json as _json
+
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
@@ -9,15 +11,25 @@ from app.core.exceptions import DataSourceError
 # Hard-coded readonly scope — never allow write scopes here
 _READONLY_SCOPE = "https://www.googleapis.com/auth/spreadsheets.readonly"
 
+_service = None  # singleton — avoid recreating client on every request
+
 
 def _build_service():
-    creds = service_account.Credentials.from_service_account_file(
-        settings.google_application_credentials,
-        scopes=[_READONLY_SCOPE],
-    )
-    # Verify scope is strictly readonly — guard against misconfigured env
+    raw = settings.google_application_credentials.strip()
+    if raw.startswith("{"):
+        info = _json.loads(raw)
+        creds = service_account.Credentials.from_service_account_info(info, scopes=[_READONLY_SCOPE])
+    else:
+        creds = service_account.Credentials.from_service_account_file(raw, scopes=[_READONLY_SCOPE])
     assert _READONLY_SCOPE in creds.scopes, "Sheets credentials must use readonly scope only"
     return build("sheets", "v4", credentials=creds, cache_discovery=False)
+
+
+def _get_service():
+    global _service
+    if _service is None:
+        _service = _build_service()
+    return _service
 
 
 def read_tab(
@@ -27,7 +39,7 @@ def read_tab(
     """Read a single tab and return raw cell matrix (list of rows, each row is list of values)."""
     sid = spreadsheet_id or settings.default_spreadsheet_id
     try:
-        service = _build_service()
+        service = _get_service()
         result = (
             service.spreadsheets()
             .values()
@@ -53,7 +65,7 @@ def read_tabs(
     """Read multiple tabs in a single batchGet call. Returns dict keyed by tab name."""
     sid = spreadsheet_id or settings.default_spreadsheet_id
     try:
-        service = _build_service()
+        service = _get_service()
         result = (
             service.spreadsheets()
             .values()
