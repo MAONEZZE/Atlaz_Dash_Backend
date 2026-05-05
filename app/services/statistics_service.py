@@ -148,10 +148,36 @@ def _consolidate(a: NormalizedStatistics, b: NormalizedStatistics) -> Normalized
     )
 
 
+def _parse_responsavel(responsavel: Optional[str]) -> tuple[Optional[int], Optional[str]]:
+    """
+    Parse responsavel param. Returns (user_id, cargo_group):
+      - "closers"/"sdrs" → (None, "closers"/"sdrs")
+      - numeric string   → (int, None)
+      - None/outros      → (None, None)
+    """
+    if not responsavel:
+        return None, None
+    v = responsavel.strip().lower()
+    if v in ("closers", "sdrs"):
+        return None, v
+    try:
+        return int(responsavel), None
+    except (ValueError, TypeError):
+        return None, None
+
+
+def _apply_cargo_filter(stats: NormalizedStatistics, cargo_group: Optional[str]) -> NormalizedStatistics:
+    if cargo_group == "closers":
+        return NormalizedStatistics(sdr=[], closer=stats.closer)
+    if cargo_group == "sdrs":
+        return NormalizedStatistics(sdr=stats.sdr, closer=[])
+    return stats
+
+
 async def get_statistics(
     start_ms: Optional[int] = None,
     end_ms: Optional[int] = None,
-    user_id: Optional[int] = None,
+    responsavel: Optional[str] = None,
     produto: Optional[str] = None,
     etapa_do_funil: Optional[str] = None,
     status_do_negocio: Optional[str] = None,
@@ -159,6 +185,7 @@ async def get_statistics(
     faixa_de_ticket: Optional[str] = None,
     tipo_de_atividade: Optional[str] = None,
 ) -> NormalizedStatistics:
+    user_id, cargo_group = _parse_responsavel(responsavel)
     period = classify_period(start_ms, end_ms)
 
     current_stats = NormalizedStatistics()
@@ -192,4 +219,5 @@ async def get_statistics(
         except Exception as exc:
             logger.warning("statistics_service: DB fetch failed | type={} | detail={}", type(exc).__name__, str(exc))
 
-    return _consolidate(current_stats, past_stats)
+    result = _consolidate(current_stats, past_stats)
+    return _apply_cargo_filter(result, cargo_group)

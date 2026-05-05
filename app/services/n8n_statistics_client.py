@@ -20,6 +20,7 @@ async def fetch_current_month_statistics(
     data_inicio: Optional[int] = None,
     data_fim: Optional[int] = None,
     responsavel: Optional[int] = None,
+    canal: Optional[str] = None,
     produto: Optional[str] = None,
     etapa_do_funil: Optional[str] = None,
     status_do_negocio: Optional[str] = None,
@@ -38,6 +39,8 @@ async def fetch_current_month_statistics(
         params["data_fim"] = data_fim
     if responsavel is not None:
         params["responsavel"] = responsavel
+    if canal:
+        params["canal"] = canal
     if produto:
         params["produto"] = produto
     if etapa_do_funil:

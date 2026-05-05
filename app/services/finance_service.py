@@ -16,6 +16,7 @@ from app.dtos.sales_values_dto import (
     MonthlyFinancialTableDTO,
     MonthlyFinancialTableRowDTO,
     ProductRevenueDTO,
+    ProductsTotalDTO,
     SalesFinanceResponseDTO,
 )
 from app.services.base_vendas_parser import (
@@ -247,10 +248,18 @@ def get_sales_finance_data(
         em_neg = [r for r in records
                   if normalize_for_compare(r.status) not in ("ganho", "perdido")]
 
+        produtos = _build_produtos(ganho)
+        produtos_total = ProductsTotalDTO(
+            bruto=round(sum(p.bruto for p in produtos), 2),
+            liquido=round(sum(p.liquido for p in produtos), 2),
+            vendas=sum(p.vendas for p in produtos),
+        )
+
         return SalesFinanceResponseDTO(
             FIN_RESUMO=_build_resumo(ganho, em_neg),
             MESES_FIN=_build_meses_fin(ganho),
-            PRODUTOS=_build_produtos(ganho),
+            PRODUTOS=produtos,
+            PRODUTOS_TOTAL=produtos_total,
             RECEITA_POR_CANAL=_build_canais(ganho),
             FIN_BREAKDOWN=_build_breakdown(ganho),
             TABELA_FIN_MENSAL=_build_tabela(ganho),

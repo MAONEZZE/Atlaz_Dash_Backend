@@ -32,7 +32,7 @@ async def user_statistics(
 ) -> dict:
     """Return statistics for a single user by dash_users.id."""
     try:
-        stats = await get_statistics(start_ms=data_inicio, end_ms=data_fim, user_id=user_id)
+        stats = await get_statistics(start_ms=data_inicio, end_ms=data_fim, responsavel=str(user_id))
         user = get_user_by_id(str(user_id))
         response = map_to_statistic_response(stats)
         return UserStatisticsResponseDTO(

@@ -1,8 +1,4 @@
-"""
-Sales finance DTOs — Phase 2 placeholder.
-Data source: BASE_VENDAS tab. Wiring deferred to Phase 2.
-All numeric fields default 0, arrays [], strings "".
-"""
+"""Sales finance DTOs. Data source: BASE_VENDAS tab."""
 from pydantic import BaseModel, Field
 from typing import Literal
 
@@ -77,10 +73,17 @@ class MonthlyFinancialTableDTO(BaseModel):
     linhas: list[MonthlyFinancialTableRowDTO] = Field(default_factory=list)
 
 
+class ProductsTotalDTO(BaseModel):
+    bruto: float = 0
+    liquido: float = 0
+    vendas: int = 0
+
+
 class SalesFinanceResponseDTO(BaseModel):
     FIN_RESUMO: FinancialSummaryDTO = Field(default_factory=FinancialSummaryDTO)
     MESES_FIN: list[FinancialMonthDTO] = Field(default_factory=list)
     PRODUTOS: list[ProductRevenueDTO] = Field(default_factory=list)
+    PRODUTOS_TOTAL: ProductsTotalDTO = Field(default_factory=ProductsTotalDTO)
     RECEITA_POR_CANAL: list[ChannelRevenueDTO] = Field(default_factory=list)
     FIN_BREAKDOWN: list[FinancialBreakdownDTO] = Field(default_factory=list)
     TABELA_FIN_MENSAL: MonthlyFinancialTableDTO = Field(default_factory=MonthlyFinancialTableDTO)

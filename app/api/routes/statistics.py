@@ -14,7 +14,7 @@ router = APIRouter()
 async def statistics(
     data_inicio: Optional[int] = Query(default=None, description="Início do período (timestamp ms)"),
     data_fim: Optional[int] = Query(default=None, description="Fim do período (timestamp ms)"),
-    responsavel: Optional[int] = Query(default=None, description="ID do usuário (dash_users.id)"),
+    responsavel: Optional[str] = Query(default=None, description="ID do usuário (int), 'closers' ou 'sdrs'"),
     produto: Optional[str] = Query(default=None),
     etapa_do_funil: Optional[str] = Query(default=None),
     status_do_negocio: Optional[str] = Query(default=None),
@@ -31,7 +31,7 @@ async def statistics(
         stats = await get_statistics(
             start_ms=data_inicio,
             end_ms=data_fim,
-            user_id=responsavel,
+            responsavel=responsavel,
             produto=produto,
             etapa_do_funil=etapa_do_funil,
             status_do_negocio=status_do_negocio,

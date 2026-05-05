@@ -34,6 +34,7 @@ class FunnelAuxDTO(BaseModel):
 
 
 class ChannelFunnelDTO(BaseModel):
+    id: str = ""
     nome: str = ""
     cor: str = "#6B7280"
     corAcc: str = "#4B5563"
@@ -45,19 +46,19 @@ class ChannelFunnelDTO(BaseModel):
 
 class PreSalesFunnelDTO(BaseModel):
     linkedin: ChannelFunnelDTO = Field(default_factory=lambda: ChannelFunnelDTO(
-        nome="LinkedIn", cor="#0077B5", corAcc="#005885", sub="Prospecção via LinkedIn"
+        id="linkedin", nome="LinkedIn", cor="#0077B5", corAcc="#005885", sub="Prospecção via LinkedIn"
     ))
     instagram: ChannelFunnelDTO = Field(default_factory=lambda: ChannelFunnelDTO(
-        nome="Instagram", cor="#E1306C", corAcc="#B02356", sub="Prospecção via Instagram"
+        id="instagram", nome="Instagram", cor="#E1306C", corAcc="#B02356", sub="Prospecção via Instagram"
     ))
     indicacao: ChannelFunnelDTO = Field(default_factory=lambda: ChannelFunnelDTO(
-        nome="Indicação", cor="#F59E0B", corAcc="#D97706", sub="Leads por indicação"
+        id="indicacao", nome="Indicação", cor="#F59E0B", corAcc="#D97706", sub="Leads por indicação"
     ))
     whatsapp: ChannelFunnelDTO = Field(default_factory=lambda: ChannelFunnelDTO(
-        nome="WhatsApp", cor="#25D366", corAcc="#1DA850", sub="Prospecção via WhatsApp"
+        id="whatsapp", nome="WhatsApp", cor="#25D366", corAcc="#1DA850", sub="Prospecção via WhatsApp"
     ))
     outros: ChannelFunnelDTO = Field(default_factory=lambda: ChannelFunnelDTO(
-        nome="Outros", cor="#6B7280", corAcc="#4B5563", sub="Outros canais"
+        id="outros", nome="Outros", cor="#6B7280", corAcc="#4B5563", sub="Outros canais"
     ))
 
 

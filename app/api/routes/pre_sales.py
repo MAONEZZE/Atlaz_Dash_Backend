@@ -16,5 +16,5 @@ async def pre_sales_funnels(
     data_fim: Optional[int] = Query(default=None, description="Fim do período (timestamp ms)"),
 ) -> dict:
     """Funnel data per channel for Pré-vendas page. Reads BASE_VENDAS tab."""
-    response = get_pre_sales_funnels(data_inicio=data_inicio, data_fim=data_fim)
+    response = await get_pre_sales_funnels(data_inicio=data_inicio, data_fim=data_fim)
     return response.model_dump()
