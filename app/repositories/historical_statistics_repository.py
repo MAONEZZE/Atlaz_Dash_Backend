@@ -14,7 +14,6 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.config import settings
-from app.utils.normalize_text import normalize_for_compare
 
 # Intentionally lazy — engine created only if DATABASE_URL is set
 _engine = None
@@ -29,28 +28,14 @@ def _get_engine():
     return _engine
 
 
-def _normalize_filter(value: Optional[str]) -> Optional[str]:
-    if not value or not value.strip():
-        return None
-    return normalize_for_compare(value.strip())
-
-
 def fetch_historical_statistics(
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
-    channel: Optional[str] = None,
-    responsible: Optional[str] = None,
-    product: Optional[str] = None,
-    stage: Optional[str] = None,
-    status: Optional[str] = None,
-    revenue_type: Optional[str] = None,
-    ticket_range: Optional[str] = None,
-    activity: Optional[str] = None,
+    user_id: Optional[int] = None,
 ) -> list[dict]:
     """
     Query historical statistics from Supabase Postgres.
     Returns [] if DB unavailable or no rows match.
-    Text filters are case-insensitive; normalize accent on Python side before calling.
     """
     engine = _get_engine()
     if engine is None:
@@ -58,24 +43,19 @@ def fetch_historical_statistics(
         return []
 
     params: dict = {}
+    conditions: list[str] = ["TRUE"]
 
-    # Build WHERE clause — date filter + responsible name filter
-    date_conditions = []
     if start_date:
-        date_conditions.append("m.data_referente >= :start_date")
+        conditions.append("m.data_referente >= :start_date")
         params["start_date"] = start_date
     if end_date:
-        date_conditions.append("m.data_referente < :end_date")
+        conditions.append("m.data_referente < :end_date")
         params["end_date"] = end_date
+    if user_id is not None:
+        conditions.append("m.id_user = :user_id")
+        params["user_id"] = user_id
 
-    responsible_filter = ""
-    if responsible:
-        normalized_responsible = _normalize_filter(responsible)
-        if normalized_responsible:
-            responsible_filter = "AND lower(u.nome::text) = :responsible"
-            params["responsible"] = normalized_responsible
-
-    date_where = ("WHERE " + " AND ".join(date_conditions)) if date_conditions else "WHERE TRUE"
+    where_clause = "WHERE " + " AND ".join(conditions)
 
     query = text(f"""
         SELECT
@@ -94,8 +74,7 @@ def fetch_historical_statistics(
             SUM(COALESCE(m.indicacoes_atual, 0))        AS indicacoes
         FROM dash_metricas_prospeccao m
         JOIN dash_users u ON m.id_user = u.id
-        {date_where}
-        {responsible_filter}
+        {where_clause}
         GROUP BY u.id, u.nome, u.cargo
         ORDER BY u.nome
     """)

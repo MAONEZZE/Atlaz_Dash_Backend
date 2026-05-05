@@ -15,12 +15,26 @@ _service = None  # singleton — avoid recreating client on every request
 
 
 def _build_service():
-    raw = settings.google_application_credentials.strip()
-    if raw.startswith("{"):
-        info = _json.loads(raw)
+    # Priority: GOOGLE_SHEETS_CREDENTIALS_JSON (inline JSON) > GOOGLE_APPLICATION_CREDENTIALS (file path)
+    json_str = settings.google_sheets_credentials_json.strip()
+    file_path = settings.google_application_credentials.strip()
+
+    if json_str:
+        try:
+            info = _json.loads(json_str)
+        except _json.JSONDecodeError as exc:
+            raise DataSourceError("google_sheets", f"GOOGLE_SHEETS_CREDENTIALS_JSON is not valid JSON: {exc}") from exc
         creds = service_account.Credentials.from_service_account_info(info, scopes=[_READONLY_SCOPE])
+    elif file_path:
+        if not file_path.endswith(".json"):
+            raise DataSourceError("google_sheets", "GOOGLE_APPLICATION_CREDENTIALS must point to a .json file")
+        creds = service_account.Credentials.from_service_account_file(file_path, scopes=[_READONLY_SCOPE])
     else:
-        creds = service_account.Credentials.from_service_account_file(raw, scopes=[_READONLY_SCOPE])
+        raise DataSourceError(
+            "google_sheets",
+            "No credentials configured. Set GOOGLE_SHEETS_CREDENTIALS_JSON (JSON content) or GOOGLE_APPLICATION_CREDENTIALS (file path).",
+        )
+
     assert _READONLY_SCOPE in creds.scopes, "Sheets credentials must use readonly scope only"
     return build("sheets", "v4", credentials=creds, cache_discovery=False)
 

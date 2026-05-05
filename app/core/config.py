@@ -4,7 +4,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
-    google_application_credentials: str = "./credentials/service-account.json"
+    # Accepts either a file path (GOOGLE_APPLICATION_CREDENTIALS) or inline JSON string (GOOGLE_SHEETS_CREDENTIALS_JSON)
+    google_application_credentials: str = ""
+    google_sheets_credentials_json: str = ""
     google_sheets_scopes: str = "https://www.googleapis.com/auth/spreadsheets.readonly"
     default_spreadsheet_id: str = "1NrKYW3BByJJ688ILwG20AvBuc-YggkwkOun34Ewjwck"
 

@@ -1,7 +1,9 @@
 """
 Sales finance route — reads BASE_VENDAS tab.
 """
-from fastapi import APIRouter
+from typing import Optional
+
+from fastapi import APIRouter, Query
 
 from app.services.finance_service import get_sales_finance_data
 
@@ -9,7 +11,10 @@ router = APIRouter()
 
 
 @router.get("/sales/finance", response_model=None)
-async def sales_finance() -> dict:
+async def sales_finance(
+    data_inicio: Optional[int] = Query(default=None, description="Início do período (timestamp ms)"),
+    data_fim: Optional[int] = Query(default=None, description="Fim do período (timestamp ms)"),
+) -> dict:
     """Financial data for Vendas page. Reads BASE_VENDAS tab."""
-    response = get_sales_finance_data()
+    response = get_sales_finance_data(data_inicio=data_inicio, data_fim=data_fim)
     return response.model_dump()

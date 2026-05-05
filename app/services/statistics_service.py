@@ -151,14 +151,13 @@ def _consolidate(a: NormalizedStatistics, b: NormalizedStatistics) -> Normalized
 async def get_statistics(
     start_ms: Optional[int] = None,
     end_ms: Optional[int] = None,
-    channel: Optional[str] = None,
-    responsible: Optional[str] = None,
-    product: Optional[str] = None,
-    stage: Optional[str] = None,
-    status: Optional[str] = None,
-    revenue_type: Optional[str] = None,
-    ticket_range: Optional[str] = None,
-    activity: Optional[str] = None,
+    user_id: Optional[int] = None,
+    produto: Optional[str] = None,
+    etapa_do_funil: Optional[str] = None,
+    status_do_negocio: Optional[str] = None,
+    tipo_de_receita: Optional[str] = None,
+    faixa_de_ticket: Optional[str] = None,
+    tipo_de_atividade: Optional[str] = None,
 ) -> NormalizedStatistics:
     period = classify_period(start_ms, end_ms)
 
@@ -167,7 +166,17 @@ async def get_statistics(
 
     if period.current:
         try:
-            raw = await fetch_current_month_statistics()
+            raw = await fetch_current_month_statistics(
+                data_inicio=start_ms,
+                data_fim=end_ms,
+                responsavel=user_id,
+                produto=produto,
+                etapa_do_funil=etapa_do_funil,
+                status_do_negocio=status_do_negocio,
+                tipo_de_receita=tipo_de_receita,
+                faixa_de_ticket=faixa_de_ticket,
+                tipo_de_atividade=tipo_de_atividade,
+            )
             current_stats = _n8n_to_normalized(raw)
         except Exception as exc:
             logger.warning("statistics_service: n8n fetch failed | type={} | detail={}", type(exc).__name__, str(exc))
@@ -177,14 +186,7 @@ async def get_statistics(
             rows = fetch_historical_statistics(
                 start_date=period.past_range[0],
                 end_date=period.past_range[1],
-                channel=channel,
-                responsible=responsible,
-                product=product,
-                stage=stage,
-                status=status,
-                revenue_type=revenue_type,
-                ticket_range=ticket_range,
-                activity=activity,
+                user_id=user_id,
             )
             past_stats = _db_rows_to_normalized(rows)
         except Exception as exc:

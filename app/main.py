@@ -28,10 +28,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.get("/")
-async def health_check():
-    return {"status": "ok"}
-
 app.add_exception_handler(DataSourceError, data_source_exception_handler)
 app.add_exception_handler(Exception, unhandled_exception_handler)
 
