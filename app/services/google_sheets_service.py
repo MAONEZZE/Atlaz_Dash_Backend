@@ -1,8 +1,16 @@
-import json as _json
+"""
+Google Sheets service — read-only.
 
+Uses google.auth + requests (not httplib2/googleapiclient) to avoid
+socket timeout issues with httplib2 in certain environments.
+"""
+
+import json as _json
+from urllib.parse import quote as _quote
+
+import requests as _requests
+from google.auth.transport.requests import AuthorizedSession, Request
 from google.oauth2 import service_account
-from googleapiclient.discovery import build
-from googleapiclient.errors import HttpError
 from loguru import logger
 
 from app.core.config import settings
@@ -10,16 +18,15 @@ from app.core.exceptions import DataSourceError
 
 # Hard-coded readonly scope — never allow write scopes here
 _READONLY_SCOPE = "https://www.googleapis.com/auth/spreadsheets.readonly"
+_SHEETS_BASE = "https://sheets.googleapis.com/v4/spreadsheets"
 
-_service = None  # singleton — avoid recreating client on every request
+_session: AuthorizedSession | None = None
 
 
 def _resolve_credentials() -> service_account.Credentials:
     """
     Load service account credentials from env vars.
-    Accepted formats (checked in order):
-      1. GOOGLE_SHEETS_CREDENTIALS_JSON — inline JSON string
-      2. GOOGLE_APPLICATION_CREDENTIALS  — inline JSON string OR file path
+    Priority: GOOGLE_SHEETS_CREDENTIALS_JSON > GOOGLE_APPLICATION_CREDENTIALS (both accept inline JSON or file path).
     """
     candidates = [
         settings.google_sheets_credentials_json.strip(),
@@ -35,55 +42,62 @@ def _resolve_credentials() -> service_account.Credentials:
             except _json.JSONDecodeError as exc:
                 raise DataSourceError("google_sheets", f"Credentials env var is not valid JSON: {exc}") from exc
             return service_account.Credentials.from_service_account_info(info, scopes=[_READONLY_SCOPE])
-        # Treat as file path
         return service_account.Credentials.from_service_account_file(raw, scopes=[_READONLY_SCOPE])
 
     raise DataSourceError(
         "google_sheets",
-        "No credentials configured. Set GOOGLE_SHEETS_CREDENTIALS_JSON (JSON content) or GOOGLE_APPLICATION_CREDENTIALS (JSON content or file path).",
+        "No credentials configured. Set GOOGLE_SHEETS_CREDENTIALS_JSON or GOOGLE_APPLICATION_CREDENTIALS.",
     )
 
 
-def _build_service():
-    creds = _resolve_credentials()
-    assert _READONLY_SCOPE in creds.scopes, "Sheets credentials must use readonly scope only"
-    return build("sheets", "v4", credentials=creds, cache_discovery=False)
-
-
-def _get_service():
-    global _service
-    if _service is None:
+def _get_session() -> AuthorizedSession:
+    global _session
+    if _session is None:
         try:
-            _service = _build_service()
+            creds = _resolve_credentials()
+            assert _READONLY_SCOPE in creds.scopes, "Sheets credentials must use readonly scope only"
+            _session = AuthorizedSession(creds)
         except Exception:
-            _service = None  # don't cache failed build
+            _session = None
             raise
-    return _service
+    return _session
+
+
+def _get(url: str) -> dict:
+    """Execute authenticated GET, raise DataSourceError on failure."""
+    try:
+        session = _get_session()
+        resp = session.get(url, timeout=30)
+        resp.raise_for_status()
+        return resp.json()
+    except _requests.HTTPError as exc:
+        logger.warning("Sheets HTTP error | url={} | status={}", url, exc.response.status_code)
+        raise DataSourceError("google_sheets", f"HTTP {exc.response.status_code}") from exc
+    except _requests.RequestException as exc:
+        logger.warning("Sheets request error | url={} | type={} | detail={}", url, type(exc).__name__, str(exc))
+        # Reset session so next call retries auth
+        global _session
+        _session = None
+        raise DataSourceError("google_sheets", f"Request error: {exc}") from exc
+    except Exception as exc:
+        logger.warning("Sheets unexpected error | url={} | type={} | detail={}", url, type(exc).__name__, str(exc))
+        _session = None
+        raise DataSourceError("google_sheets", f"Unexpected error: {exc}") from exc
 
 
 def read_tab(
     spreadsheet_id: str | None = None,
     tab_name: str = "Sheet1",
 ) -> list[list]:
-    """Read a single tab and return raw cell matrix (list of rows, each row is list of values)."""
+    """Read a single tab and return raw cell matrix."""
     sid = spreadsheet_id or settings.default_spreadsheet_id
+    url = f"{_SHEETS_BASE}/{sid}/values/{_quote(tab_name)}"
     try:
-        service = _get_service()
-        result = (
-            service.spreadsheets()
-            .values()
-            .get(spreadsheetId=sid, range=tab_name)
-            .execute()
-        )
-        return result.get("values", [])
-    except HttpError as exc:
-        logger.warning("Sheets HttpError | tab={} | status={} | detail={}", tab_name, exc.status_code, str(exc))
-        raise DataSourceError("google_sheets", f"HTTP {exc.status_code} reading tab '{tab_name}'") from exc
-    except FileNotFoundError as exc:
-        logger.warning("Sheets credentials file not found: {}", settings.google_application_credentials)
-        raise DataSourceError("google_sheets", "Credentials file not found") from exc
+        data = _get(url)
+        return data.get("values", [])
+    except DataSourceError:
+        raise
     except Exception as exc:
-        logger.warning("Sheets unexpected error | tab={} | type={} | detail={}", tab_name, type(exc).__name__, str(exc))
         raise DataSourceError("google_sheets", f"Unexpected error reading tab '{tab_name}'") from exc
 
 
@@ -93,26 +107,17 @@ def read_tabs(
 ) -> dict[str, list[list]]:
     """Read multiple tabs in a single batchGet call. Returns dict keyed by tab name."""
     sid = spreadsheet_id or settings.default_spreadsheet_id
+    ranges_param = "&".join(f"ranges={_quote(t)}" for t in tab_names)
+    url = f"{_SHEETS_BASE}/{sid}/values:batchGet?{ranges_param}"
     try:
-        service = _get_service()
-        result = (
-            service.spreadsheets()
-            .values()
-            .batchGet(spreadsheetId=sid, ranges=tab_names)
-            .execute()
-        )
-        value_ranges = result.get("valueRanges", [])
+        data = _get(url)
+        value_ranges = data.get("valueRanges", [])
         out: dict[str, list[list]] = {}
         for i, tab in enumerate(tab_names):
             vr = value_ranges[i] if i < len(value_ranges) else {}
             out[tab] = vr.get("values", [])
         return out
-    except HttpError as exc:
-        logger.warning("Sheets batchGet HttpError | tabs={} | status={}", tab_names, exc.status_code)
-        raise DataSourceError("google_sheets", f"HTTP {exc.status_code} reading tabs {tab_names}") from exc
-    except FileNotFoundError as exc:
-        logger.warning("Sheets credentials file not found: {}", settings.google_application_credentials)
-        raise DataSourceError("google_sheets", "Credentials file not found") from exc
+    except DataSourceError:
+        raise
     except Exception as exc:
-        logger.warning("Sheets batchGet unexpected error | tabs={} | type={}", tab_names, type(exc).__name__)
         raise DataSourceError("google_sheets", f"Unexpected error reading tabs {tab_names}") from exc
