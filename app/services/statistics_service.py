@@ -192,10 +192,12 @@ async def get_statistics(
     past_stats = NormalizedStatistics()
 
     if period.current:
+        cur_start_ms = int(period.current_range[0].timestamp() * 1000) if period.current_range else None
+        cur_end_ms = int(period.current_range[1].timestamp() * 1000) if period.current_range else None
         try:
             raw = await fetch_current_month_statistics(
-                data_inicio=start_ms,
-                data_fim=end_ms,
+                start_ms=cur_start_ms,
+                end_ms=cur_end_ms,
                 responsavel=user_id,
                 produto=produto,
                 etapa_do_funil=etapa_do_funil,

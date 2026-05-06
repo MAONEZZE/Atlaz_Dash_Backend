@@ -10,8 +10,8 @@ from app.services.statistics_service import get_statistics
 router = APIRouter()
 
 
-@router.get("/statistics", response_model=None)
-async def statistics(
+@router.get("/metrics", response_model=None)
+async def metrics(
     data_inicio: Optional[int] = Query(default=None, description="Início do período (timestamp ms)"),
     data_fim: Optional[int] = Query(default=None, description="Fim do período (timestamp ms)"),
     responsavel: Optional[str] = Query(default=None, description="ID do usuário (int), 'closers' ou 'sdrs'"),
@@ -41,7 +41,7 @@ async def statistics(
         )
         response = map_to_statistic_response(stats)
     except Exception as exc:
-        logger.warning("statistics route: unexpected error | type={} | detail={}", type(exc).__name__, str(exc))
+        logger.warning("metrics route: unexpected error | type={} | detail={}", type(exc).__name__, str(exc))
         response = StatisticResponseDTO.empty()
 
     return response.model_dump()

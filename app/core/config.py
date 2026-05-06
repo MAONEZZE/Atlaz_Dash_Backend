@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     database_url: str = ""
 
     n8n_statistics_url: str = "https://n8n.learningbrands.cloud/webhook/statistic"
+    n8n_team_goals_url: str = "https://n8n.learningbrands.cloud/webhook/team/goals"
+    n8n_pre_sales_url: str = "https://n8n.learningbrands.cloud/webhook/pre-sales/funels"
     n8n_statistics_timeout_seconds: int = 10
 
     cors_origins: str = "http://localhost:3000,http://localhost:5173"

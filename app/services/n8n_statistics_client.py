@@ -1,9 +1,20 @@
+from datetime import datetime, timezone
 from typing import Optional
 
 import httpx
+import pytz
 from loguru import logger
 
 from app.core.config import settings
+
+_TZ_BR = pytz.timezone("America/Sao_Paulo")
+
+
+def _current_month_ms() -> tuple[int, int]:
+    """Return (start_ms, end_ms) for current month in America/Sao_Paulo."""
+    now_br = datetime.now(_TZ_BR)
+    start_br = now_br.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    return int(start_br.timestamp() * 1000), int(now_br.timestamp() * 1000)
 
 
 def _validate_shape(data: object) -> bool:
@@ -17,8 +28,8 @@ def _validate_shape(data: object) -> bool:
 
 
 async def fetch_current_month_statistics(
-    data_inicio: Optional[int] = None,
-    data_fim: Optional[int] = None,
+    start_ms: Optional[int] = None,
+    end_ms: Optional[int] = None,
     responsavel: Optional[int] = None,
     canal: Optional[str] = None,
     produto: Optional[str] = None,
@@ -32,11 +43,12 @@ async def fetch_current_month_statistics(
     url = settings.n8n_statistics_url
     timeout = float(settings.n8n_statistics_timeout_seconds)
 
-    params: dict = {}
-    if data_inicio is not None:
-        params["data_inicio"] = data_inicio
-    if data_fim is not None:
-        params["data_fim"] = data_fim
+    # n8n requires start_date and end_date; default to current month
+    default_start, default_end = _current_month_ms()
+    params: dict = {
+        "start_date": start_ms if start_ms is not None else default_start,
+        "end_date": end_ms if end_ms is not None else default_end,
+    }
     if responsavel is not None:
         params["responsavel"] = responsavel
     if canal:

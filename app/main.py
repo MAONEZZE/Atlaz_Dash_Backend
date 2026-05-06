@@ -5,7 +5,7 @@ from app.core.config import settings
 from app.core.exceptions import DataSourceError, data_source_exception_handler, unhandled_exception_handler
 import app.core.logging  # noqa: F401 — initializes loguru
 
-from app.api.routes import health, statistics, goals, users, sales_values, pre_sales, sheets_debug
+from app.api.routes import health, metrics, goals, users, sales_values, pre_sales, sheets_debug
 
 app = FastAPI(
     title="Atlaz Dash Backend",
@@ -32,7 +32,7 @@ app.add_exception_handler(DataSourceError, data_source_exception_handler)
 app.add_exception_handler(Exception, unhandled_exception_handler)
 
 app.include_router(health.router)
-app.include_router(statistics.router)
+app.include_router(metrics.router)
 app.include_router(goals.router)
 app.include_router(users.router)
 app.include_router(sales_values.router)
