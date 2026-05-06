@@ -3,14 +3,15 @@ Sales finance route — reads BASE_VENDAS tab.
 """
 from typing import Optional
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 
+from app.core.auth import require_api_key
 from app.services.finance_service import get_sales_finance_data
 
 router = APIRouter()
 
 
-@router.get("/sales/values", response_model=None)
+@router.get("/sales/values", response_model=None, dependencies=[Depends(require_api_key)])
 async def sales_finance(
     data_inicio: Optional[int] = Query(default=None, description="Início do período (timestamp ms)"),
     data_fim: Optional[int] = Query(default=None, description="Fim do período (timestamp ms)"),

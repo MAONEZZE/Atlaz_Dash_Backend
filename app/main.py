@@ -5,7 +5,7 @@ from app.core.config import settings
 from app.core.exceptions import DataSourceError, data_source_exception_handler, unhandled_exception_handler
 import app.core.logging  # noqa: F401 — initializes loguru
 
-from app.api.routes import health, metrics, goals, users, sales_values, pre_sales, sheets_debug
+from app.api.routes import health, metrics, goals, users, sales_values, pre_sales
 
 app = FastAPI(
     title="Atlaz Dash Backend",
@@ -24,8 +24,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "OPTIONS"],
+    allow_headers=["Content-Type", "Accept", "X-API-Key"],
 )
 
 app.add_exception_handler(DataSourceError, data_source_exception_handler)
@@ -37,4 +37,7 @@ app.include_router(goals.router)
 app.include_router(users.router)
 app.include_router(sales_values.router)
 app.include_router(pre_sales.router)
-app.include_router(sheets_debug.router)
+
+if settings.debug_routes_enabled:
+    from app.api.routes import sheets_debug
+    app.include_router(sheets_debug.router)

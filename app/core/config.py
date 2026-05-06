@@ -17,7 +17,9 @@ class Settings(BaseSettings):
     n8n_pre_sales_url: str = "https://n8n.learningbrands.cloud/webhook/pre-sales/funels"
     n8n_statistics_timeout_seconds: int = 10
 
-    cors_origins: str = "http://localhost:3000,http://localhost:5173"
+    cors_origins: str = "https://dash.learningbrands.cloud"
+
+    sales_api_key: str = ""
 
     debug_routes_enabled: bool = False
 
