@@ -27,9 +27,19 @@ def _image_url(nome: str) -> str:
     return f"{_BASE_IMAGE_URL.format(name=token_key)}?token={token}"
 
 
+def _normalize_cargo(raw: str) -> str:
+    from app.utils.normalize_text import normalize_for_compare
+    v = normalize_for_compare(raw)
+    if "sdr" in v or "pre" in v:
+        return "SDR"
+    if "closer" in v or "vendedor" in v:
+        return "Closer"
+    return raw.strip().title()
+
+
 def _row_to_dto(row: dict) -> UserInfoDTO:
     nome = str(row.get("nome") or "")
-    cargo = str(row.get("cargo") or "").lower()
+    cargo = _normalize_cargo(str(row.get("cargo") or ""))
     imagem = str(row.get("imagem_url") or "") or _image_url(nome)
     return UserInfoDTO(
         id=str(row["id"]),
