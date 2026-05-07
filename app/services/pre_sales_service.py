@@ -1,15 +1,14 @@
 """
 Pre-sales service.
-- Activity metrics (top-of-funnel) per channel: fetched from n8n with canal filter.
+- Activity metrics (top-of-funnel): LinkedIn data from daily-metrics sheets;
+  other channels pending dedicated data source.
 - Closings (fechamentos) per channel: read from BASE_VENDAS.
 """
 
-import asyncio
 from typing import Optional
 
 from loguru import logger
 
-from app.core.config import settings
 from app.dtos.pre_sales_dto import (
     ChannelFunnelDTO,
     FunnelAuxBlockDTO,
@@ -21,19 +20,12 @@ from app.dtos.pre_sales_dto import (
 )
 from app.services.base_vendas_parser import filter_records, parse_base_vendas
 from app.services.google_sheets_service import read_tab
-from app.services.n8n_statistics_client import fetch_current_month_statistics
+from app.core.config import settings
 from app.utils.normalize_number import normalize_number
+from app.utils.normalize_text import normalize_for_compare
 
-# Canonical canal names sent to n8n as filter
-_CANAL_N8N_LABEL = {
-    "linkedin":  "LinkedIn",
-    "instagram": "Instagram",
-    "indicacao": "Indicação",
-    "whatsapp":  "WhatsApp",
-    "outros":    "Outros",
-}
+_CANAL_KEYS = ["linkedin", "instagram", "indicacao", "whatsapp", "outros"]
 
-# Canal → event canal label in BASE_VENDAS
 _CANAL_BV_LABEL = {
     "linkedin":  "LinkedIn",
     "instagram": "Instagram",
@@ -45,6 +37,36 @@ _CANAL_BV_LABEL = {
 
 def _sum_sdr(raw_list: list[dict], field: str) -> int:
     return int(sum(normalize_number(r.get(field, 0)) for r in raw_list))
+
+
+def _normalized_to_raw_sdr(stats) -> list[dict]:
+    """Convert NormalizedSdrStats list → raw dict list matching builder expectations."""
+    return [
+        {
+            "Conexoes_Enviadas":  s.conexoes_enviadas,
+            "Conexoes_Aceitas":   s.conexoes_aceitas,
+            "Abordagens":         s.abordagens,
+            "InMails_Enviados":   s.inmails_enviados,
+            "Follow_ups":         s.follow_ups,
+            "Numeros_Captados":   s.numeros_captados,
+            "Ligacoes_Agendadas": s.ligacoes_agendadas,
+            "Indicacoes_Captadas":s.indicacoes_captadas,
+        }
+        for s in stats
+    ]
+
+
+def _normalized_to_raw_closer(stats) -> list[dict]:
+    """Convert NormalizedCloserStats list → raw dict list matching builder expectations."""
+    return [
+        {
+            "Ligacoes_Realizadas": s.ligacoes_realizadas,
+            "Reunioes_Agendadas":  s.reunioes_agendadas,
+            "Reunioes_Realizadas": s.reunioes_realizadas,
+            "Indicacoes":          s.indicacoes,
+        }
+        for s in stats
+    ]
 
 
 def _build_linkedin(sdr: list, closer: list, fechamentos: int) -> ChannelFunnelDTO:
@@ -86,9 +108,9 @@ def _build_linkedin(sdr: list, closer: list, fechamentos: int) -> ChannelFunnelD
         aux=FunnelAuxDTO(
             titulo="Follow-up & engajamento",
             blocos=[
-                FunnelAuxBlockDTO(l="Follow-ups feitos",  v=followups, fmt="num"),
-                FunnelAuxBlockDTO(l="InMails enviados",   v=_sum_sdr(sdr, "InMails_Enviados"), fmt="num"),
-                FunnelAuxBlockDTO(l="Indicações captadas", v=ind_cap, fmt="num"),
+                FunnelAuxBlockDTO(l="Follow-ups feitos",   v=followups, fmt="num"),
+                FunnelAuxBlockDTO(l="InMails enviados",    v=_sum_sdr(sdr, "InMails_Enviados"), fmt="num"),
+                FunnelAuxBlockDTO(l="Indicações captadas", v=ind_cap,   fmt="num"),
             ],
         ),
     )
@@ -124,9 +146,7 @@ def _build_instagram(sdr: list, closer: list, fechamentos: int) -> ChannelFunnel
         ],
         aux=FunnelAuxDTO(
             titulo="Engajamento & follow-up",
-            blocos=[
-                FunnelAuxBlockDTO(l="Follow-ups feitos", v=followup, fmt="num"),
-            ],
+            blocos=[FunnelAuxBlockDTO(l="Follow-ups feitos", v=followup, fmt="num")],
         ),
     )
 
@@ -196,11 +216,11 @@ def _build_whatsapp(sdr: list, closer: list, fechamentos: int) -> ChannelFunnelD
 
 
 def _build_outros(sdr: list, closer: list, fechamentos: int) -> ChannelFunnelDTO:
-    abord    = _sum_sdr(sdr, "Abordagens")
-    numeros  = _sum_sdr(sdr, "Numeros_Captados")
-    lig_ag   = _sum_sdr(sdr, "Ligacoes_Agendadas")
-    reu_ag   = int(sum(normalize_number(r.get("Reunioes_Agendadas", 0)) for r in closer))
-    reu_real = int(sum(normalize_number(r.get("Reunioes_Realizadas", 0)) for r in closer))
+    abord   = _sum_sdr(sdr, "Abordagens")
+    numeros = _sum_sdr(sdr, "Numeros_Captados")
+    lig_ag  = _sum_sdr(sdr, "Ligacoes_Agendadas")
+    reu_ag  = int(sum(normalize_number(r.get("Reunioes_Agendadas",  0)) for r in closer))
+    reu_real= int(sum(normalize_number(r.get("Reunioes_Realizadas", 0)) for r in closer))
 
     return ChannelFunnelDTO(
         id="outros", nome="Outros", cor="#6B7280", corAcc="#4B5563",
@@ -236,38 +256,41 @@ _CANAL_BUILDERS = {
 async def get_pre_sales_funnels(
     data_inicio: Optional[int] = None,
     data_fim: Optional[int] = None,
-) -> PreSalesResponseDTO:
+) -> dict:
     try:
-        # Fetch n8n stats for each canal in parallel
-        canal_keys = list(_CANAL_N8N_LABEL.keys())
-        n8n_tasks = [
-            fetch_current_month_statistics(
-                data_inicio=data_inicio,
-                data_fim=data_fim,
-                canal=_CANAL_N8N_LABEL[k],
-            )
-            for k in canal_keys
-        ]
-        n8n_results = await asyncio.gather(*n8n_tasks, return_exceptions=True)
-        n8n_by_canal: dict[str, dict] = {}
-        for i, k in enumerate(canal_keys):
-            r = n8n_results[i]
-            if isinstance(r, Exception):
-                logger.warning("pre_sales: n8n fetch failed for canal={} | {}", k, r)
-                n8n_by_canal[k] = {"SDR": [], "CLOSER": []}
-            else:
-                n8n_by_canal[k] = r if isinstance(r, dict) else {"SDR": [], "CLOSER": []}
+        # LinkedIn activity data from daily-metrics sheets
+        linkedin_sdr: list[dict] = []
+        linkedin_closer: list[dict] = []
+        try:
+            from app.services.daily_metrics_service import fetch_current_month_from_sheets
+            lk_stats = await fetch_current_month_from_sheets(start_ms=data_inicio, end_ms=data_fim)
+            linkedin_sdr    = _normalized_to_raw_sdr(lk_stats.sdr)
+            linkedin_closer = _normalized_to_raw_closer(lk_stats.closer)
+        except ImportError:
+            pass
+        except Exception as exc:
+            logger.warning("pre_sales: daily_metrics fetch failed | {}", exc)
+
+        # Other channels have no dedicated sheet yet — return zeros
+        empty_sdr: list[dict] = []
+        empty_closer: list[dict] = []
+
+        activity_by_canal: dict[str, tuple[list, list]] = {
+            "linkedin":  (linkedin_sdr, linkedin_closer),
+            "instagram": (empty_sdr, empty_closer),
+            "indicacao": (empty_sdr, empty_closer),
+            "whatsapp":  (empty_sdr, empty_closer),
+            "outros":    (empty_sdr, empty_closer),
+        }
 
         # Fechamentos per canal from BASE_VENDAS
-        fechamentos_by_canal: dict[str, int] = {k: 0 for k in canal_keys}
+        fechamentos_by_canal: dict[str, int] = {k: 0 for k in _CANAL_KEYS}
         try:
             matrix = read_tab(settings.default_spreadsheet_id, "BASE_VENDAS")
             records = parse_base_vendas(matrix)
             filtered = filter_records(records, start_ms=data_inicio, end_ms=data_fim, status="Ganho")
             for r in filtered:
-                from app.utils.normalize_text import normalize_for_compare
                 canal_raw = normalize_for_compare(r.canal)
-                # map canal raw to key
                 for k, label in _CANAL_BV_LABEL.items():
                     if normalize_for_compare(label) == canal_raw:
                         fechamentos_by_canal[k] += 1
@@ -275,13 +298,10 @@ async def get_pre_sales_funnels(
         except Exception as exc:
             logger.warning("pre_sales: BASE_VENDAS read failed | {}", exc)
 
-        # Build each canal
         built: dict[str, ChannelFunnelDTO] = {}
-        for k in canal_keys:
-            raw = n8n_by_canal[k]
-            sdr    = raw.get("SDR", [])
-            closer = raw.get("CLOSER", [])
-            fech   = fechamentos_by_canal[k]
+        for k in _CANAL_KEYS:
+            sdr, closer = activity_by_canal[k]
+            fech = fechamentos_by_canal[k]
             try:
                 built[k] = _CANAL_BUILDERS[k](sdr, closer, fech)
             except Exception as exc:
@@ -295,8 +315,8 @@ async def get_pre_sales_funnels(
                 whatsapp  = built.get("whatsapp",  ChannelFunnelDTO(id="whatsapp",  nome="WhatsApp")),
                 outros    = built.get("outros",    ChannelFunnelDTO(id="outros",    nome="Outros")),
             )
-        )
+        ).model_dump()
 
     except Exception as exc:
         logger.warning("pre_sales_service: unexpected error | type={} | detail={}", type(exc).__name__, str(exc))
-        return PreSalesResponseDTO()
+        return PreSalesResponseDTO().model_dump()

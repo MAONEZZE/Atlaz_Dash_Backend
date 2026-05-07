@@ -22,6 +22,7 @@ class TeamGoalsDTO(BaseModel):
 
 class GoalsResponseDTO(BaseModel):
     data: list[SalesGoalsDTO] = Field(default_factory=list)
+    meta_faturamento_time: float = 0.0
 
 
 class TeamGoalsResponseDTO(BaseModel):

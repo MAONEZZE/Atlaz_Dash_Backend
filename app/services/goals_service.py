@@ -17,13 +17,14 @@ def _normalize_cargo(raw: str) -> str:
     return raw.strip().title()
 
 
-def parse_goals(matrix: list[list]) -> list[SalesGoalsDTO]:
-    """Parse METAS tab matrix into SalesGoalsDTO list."""
+def parse_goals(matrix: list[list]) -> tuple[list[SalesGoalsDTO], float]:
+    """Parse METAS tab matrix into SalesGoalsDTO list and team total revenue goal."""
     if not matrix:
-        return []
+        return [], 0.0
 
     blocks = parse_tab(matrix)
     results: list[SalesGoalsDTO] = []
+    team_total: float = 0.0
 
     for block in blocks:
         for row in block.rows:
@@ -42,7 +43,12 @@ def parse_goals(matrix: list[list]) -> list[SalesGoalsDTO]:
             cargo_raw = mapped.get("cargo", "")
             cargo = _normalize_cargo(cargo_raw) if cargo_raw else ""
 
-            # Skip summary rows and unknown roles (e.g. "Time", header repetitions)
+            # Capture team-total row (e.g. ["Time", "", "R$ 250.000"])
+            if normalize_for_compare(nome_raw) == "time":
+                team_total = normalize_currency(mapped.get("meta_mensal", ""))
+                continue
+
+            # Skip summary rows and unknown roles (e.g. header repetitions)
             if cargo not in ("Closer", "SDR"):
                 continue
 
@@ -57,4 +63,4 @@ def parse_goals(matrix: list[list]) -> list[SalesGoalsDTO]:
                 Meta_Indicacoes=int(normalize_number(mapped.get("meta_indicacoes", 0))),
             ))
 
-    return results
+    return results, team_total
