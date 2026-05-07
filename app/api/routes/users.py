@@ -1,17 +1,19 @@
-from typing import Optional
+from typing import Annotated
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends
 from loguru import logger
 
+from app.core.auth import require_auth
 from app.dtos.users_dto import UsersResponseDTO, UserStatisticsResponseDTO
 from app.mappers.statistics_mapper import map_to_statistic_response
+from app.schemas.filters_schema import DashboardFilters
 from app.services.statistics_service import get_statistics
 from app.services.user_service import get_users, get_user_by_id
 
 router = APIRouter()
 
 
-@router.get("/users", response_model=None)
+@router.get("/users", response_model=None, dependencies=[Depends(require_auth)])
 async def list_users() -> dict:
     """Return all users from dash_users table with id, name, role, and image URL."""
     try:
@@ -22,15 +24,18 @@ async def list_users() -> dict:
         return UsersResponseDTO(data=[]).model_dump()
 
 
-@router.get("/users/{user_id}/metrics", response_model=None)
+@router.get("/users/{user_id}/metrics", response_model=None, dependencies=[Depends(require_auth)])
 async def user_metrics(
     user_id: int,
-    data_inicio: Optional[int] = Query(default=None, description="Início do período (timestamp ms)"),
-    data_fim: Optional[int] = Query(default=None, description="Fim do período (timestamp ms)"),
+    filters: Annotated[DashboardFilters, Depends()],
 ) -> dict:
     """Return metrics for a single user by dash_users.id."""
     try:
-        stats = await get_statistics(start_ms=data_inicio, end_ms=data_fim, responsavel=str(user_id))
+        stats = await get_statistics(
+            start_ms=filters.data_inicio,
+            end_ms=filters.data_fim,
+            responsavel=str(user_id),
+        )
         user = get_user_by_id(str(user_id))
         response = map_to_statistic_response(stats)
         return UserStatisticsResponseDTO(

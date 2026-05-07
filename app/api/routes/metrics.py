@@ -1,26 +1,20 @@
-from typing import Optional
+from typing import Annotated
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends
 from loguru import logger
 
+from app.core.auth import require_auth
 from app.dtos.statistics_dto import StatisticResponseDTO
 from app.mappers.statistics_mapper import map_to_statistic_response
+from app.schemas.filters_schema import DashboardFilters
 from app.services.statistics_service import get_statistics
 
 router = APIRouter()
 
 
-@router.get("/metrics", response_model=None)
+@router.get("/metrics", response_model=None, dependencies=[Depends(require_auth)])
 async def metrics(
-    data_inicio: Optional[int] = Query(default=None, description="Início do período (timestamp ms)"),
-    data_fim: Optional[int] = Query(default=None, description="Fim do período (timestamp ms)"),
-    responsavel: Optional[str] = Query(default=None, description="ID do usuário (int), 'closers' ou 'sdrs'"),
-    produto: Optional[str] = Query(default=None),
-    etapa_do_funil: Optional[str] = Query(default=None),
-    status_do_negocio: Optional[str] = Query(default=None),
-    tipo_de_receita: Optional[str] = Query(default=None),
-    faixa_de_ticket: Optional[str] = Query(default=None),
-    tipo_de_atividade: Optional[str] = Query(default=None),
+    filters: Annotated[DashboardFilters, Depends()],
 ) -> dict:
     """
     Estatísticas consolidadas (Visão Geral) — Closer e SDR.
@@ -29,15 +23,16 @@ async def metrics(
     """
     try:
         stats = await get_statistics(
-            start_ms=data_inicio,
-            end_ms=data_fim,
-            responsavel=responsavel,
-            produto=produto,
-            etapa_do_funil=etapa_do_funil,
-            status_do_negocio=status_do_negocio,
-            tipo_de_receita=tipo_de_receita,
-            faixa_de_ticket=faixa_de_ticket,
-            tipo_de_atividade=tipo_de_atividade,
+            start_ms=filters.data_inicio,
+            end_ms=filters.data_fim,
+            responsavel=filters.responsavel,
+            canal=filters.canal,
+            produto=filters.produto,
+            etapa_do_funil=filters.etapa_do_funil,
+            status_do_negocio=filters.status_do_negocio,
+            tipo_de_receita=filters.tipo_de_receita,
+            faixa_de_ticket=filters.faixa_de_ticket,
+            tipo_de_atividade=filters.tipo_de_atividade,
         )
         response = map_to_statistic_response(stats)
     except Exception as exc:
