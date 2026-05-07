@@ -1,18 +1,37 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from app.core.limiter import limiter
 
 from app.core.config import settings
 from app.core.exceptions import DataSourceError, data_source_exception_handler, unhandled_exception_handler
 import app.core.logging  # noqa: F401 — initializes loguru
 
-from app.api.routes import health, metrics, goals, users, sales_values, pre_sales
+from app.api.routes import auth, health, metrics, goals, users, sales_values, pre_sales
+
+_INSECURE_JWT_KEY = "change-me-in-production"
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    if settings.jwt_secret_key == _INSECURE_JWT_KEY:
+        raise RuntimeError(
+            "JWT_SECRET_KEY is set to the insecure default value. "
+            "Set a strong random key in your .env file."
+        )
+    yield
+
 
 app = FastAPI(
+    lifespan=lifespan,
     title="Atlaz Dash Backend",
-    version="1.0.0",
+    version="2.0.0",
     description=(
         "API de leitura e normalização de dados para o dashboard Atlaz Dash.\n\n"
-        "**Fontes de dados:** Google Sheets (somente leitura), Supabase Postgres, n8n.\n\n"
+        "**Fontes de dados:** Google Sheets (somente leitura), Supabase Postgres.\n\n"
         "**Regra:** nenhum endpoint escreve, edita ou deleta dados nas planilhas."
     ),
     docs_url="/doc",
@@ -20,17 +39,21 @@ app = FastAPI(
     openapi_url="/openapi.json",
 )
 
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
     allow_credentials=True,
-    allow_methods=["GET", "OPTIONS"],
-    allow_headers=["Content-Type", "Accept", "X-API-Key"],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "Accept", "X-API-Key", "Authorization"],
 )
 
 app.add_exception_handler(DataSourceError, data_source_exception_handler)
 app.add_exception_handler(Exception, unhandled_exception_handler)
 
+app.include_router(auth.router)
 app.include_router(health.router)
 app.include_router(metrics.router)
 app.include_router(goals.router)
