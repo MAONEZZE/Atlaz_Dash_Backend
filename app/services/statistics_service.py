@@ -5,9 +5,10 @@ from loguru import logger
 
 from app.core.field_maps import resolve_name
 from app.repositories.historical_statistics_repository import fetch_historical_statistics
-from app.services.n8n_statistics_client import fetch_current_month_statistics
+from app.repositories.users_repository import fetch_user_by_id
 from app.services.period_service import classify_period
 from app.utils.normalize_number import normalize_number
+from app.utils.normalize_text import normalize_for_compare
 
 
 @dataclass
@@ -174,10 +175,33 @@ def _apply_cargo_filter(stats: NormalizedStatistics, cargo_group: Optional[str])
     return stats
 
 
+def _filter_by_user_id(stats: NormalizedStatistics, user_id: int) -> NormalizedStatistics:
+    """
+    Filter NormalizedStatistics to only the person identified by user_id.
+
+    Sheet data does not carry user IDs, so we resolve the user's name from the
+    DB and match by normalized name comparison against each entry's nome field.
+    Returns the full stats unchanged if the user cannot be resolved.
+    """
+    user_row = fetch_user_by_id(user_id)
+    if not user_row:
+        logger.warning("_filter_by_user_id: user_id={} not found in DB — returning empty stats", user_id)
+        return NormalizedStatistics()
+
+    canonical_name = resolve_name(str(user_row.get("nome", "")))
+    normalized_target = normalize_for_compare(canonical_name)
+
+    filtered_sdr = [s for s in stats.sdr if normalize_for_compare(s.nome) == normalized_target]
+    filtered_closer = [c for c in stats.closer if normalize_for_compare(c.nome) == normalized_target]
+
+    return NormalizedStatistics(sdr=filtered_sdr, closer=filtered_closer)
+
+
 async def get_statistics(
     start_ms: Optional[int] = None,
     end_ms: Optional[int] = None,
     responsavel: Optional[str] = None,
+    canal: Optional[str] = None,
     produto: Optional[str] = None,
     etapa_do_funil: Optional[str] = None,
     status_do_negocio: Optional[str] = None,
@@ -185,6 +209,9 @@ async def get_statistics(
     faixa_de_ticket: Optional[str] = None,
     tipo_de_atividade: Optional[str] = None,
 ) -> NormalizedStatistics:
+    # Import here to avoid circular imports (daily_metrics_service imports from this module)
+    from app.services.daily_metrics_service import fetch_current_month_from_sheets
+
     user_id, cargo_group = _parse_responsavel(responsavel)
     period = classify_period(start_ms, end_ms)
 
@@ -195,20 +222,14 @@ async def get_statistics(
         cur_start_ms = int(period.current_range[0].timestamp() * 1000) if period.current_range else None
         cur_end_ms = int(period.current_range[1].timestamp() * 1000) if period.current_range else None
         try:
-            raw = await fetch_current_month_statistics(
+            current_stats = await fetch_current_month_from_sheets(
                 start_ms=cur_start_ms,
                 end_ms=cur_end_ms,
-                responsavel=user_id,
-                produto=produto,
-                etapa_do_funil=etapa_do_funil,
-                status_do_negocio=status_do_negocio,
-                tipo_de_receita=tipo_de_receita,
-                faixa_de_ticket=faixa_de_ticket,
-                tipo_de_atividade=tipo_de_atividade,
             )
-            current_stats = _n8n_to_normalized(raw)
+            if user_id is not None:
+                current_stats = _filter_by_user_id(current_stats, user_id)
         except Exception as exc:
-            logger.warning("statistics_service: n8n fetch failed | type={} | detail={}", type(exc).__name__, str(exc))
+            logger.warning("statistics_service: sheets fetch failed | type={} | detail={}", type(exc).__name__, str(exc))
 
     if period.past and period.past_range:
         try:
