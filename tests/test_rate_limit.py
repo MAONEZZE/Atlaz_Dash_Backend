@@ -8,7 +8,7 @@ client = TestClient(app, raise_server_exceptions=False)
 
 def test_login_rate_limit_triggers_after_5_attempts():
     # Reset limiter state to ensure a clean counter for this test
-    limiter._limiter.storage.reset()  # clears all in-memory counters
+    limiter.reset()  # clears all in-memory counters
     bad_body = {"email": "ratelimit@test.com", "password": "wrong"}
     statuses = [client.post("/auth/login", json=bad_body).status_code for _ in range(6)]
     assert statuses[:5] == [401] * 5

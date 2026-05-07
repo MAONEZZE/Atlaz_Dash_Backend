@@ -32,6 +32,6 @@ def test_endpoint_accepts_valid_token(path):
     app.dependency_overrides[require_auth] = _mock_auth
     try:
         resp = client.get(path)
-        assert resp.status_code != 401
+        assert resp.status_code == 200
     finally:
         app.dependency_overrides.pop(require_auth, None)

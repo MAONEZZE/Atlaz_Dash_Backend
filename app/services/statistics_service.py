@@ -181,7 +181,7 @@ def _filter_by_user_id(stats: NormalizedStatistics, user_id: int) -> NormalizedS
 
     Sheet data does not carry user IDs, so we resolve the user's name from the
     DB and match by normalized name comparison against each entry's nome field.
-    Returns the full stats unchanged if the user cannot be resolved.
+    Returns empty NormalizedStatistics if the user cannot be resolved.
     """
     user_row = fetch_user_by_id(user_id)
     if not user_row:
